@@ -1,0 +1,275 @@
+// Generel App - MLM / Investment Platform
+// Schema reflects project_roadmap.md section 2 (Core Modules)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  AGENT
+  CUSTOMER
+}
+
+enum UserStatus {
+  NORMAL
+  ACTIVE
+}
+
+enum LegSide {
+  LEFT
+  RIGHT
+}
+
+enum CommissionType {
+  DIRECT
+  TEAM_MATCHING
+}
+
+enum WithdrawChannel {
+  ADMIN
+  AGENT
+  ID_TO_ID
+}
+
+enum WalletSource {
+  C_WALLET
+  R_WALLET
+}
+
+enum DepositMethod {
+  BANK
+  MFS
+  DIGITAL
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RewardStatus {
+  PENDING_CLAIM
+  APPROVED
+  DELIVERED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  mobile        String   @unique
+  passwordHash  String
+  transactionPinHash String? // separate PIN required to confirm transfers
+  role          Role     @default(CUSTOMER)
+  status        UserStatus @default(NORMAL)
+  createdAt     DateTime @default(now())
+
+  uplineId      String?
+  upline        User?    @relation("UplinePlacement", fields: [uplineId], references: [id])
+  downlines     User[]   @relation("UplinePlacement")
+
+  placedSide    LegSide?   // Left/Right chosen at join time — admin-only to change after
+  leftChildId   String?  @unique
+  leftChild     User?    @relation("LeftChild", fields: [leftChildId], references: [id])
+  rightChildId  String?  @unique
+  rightChild    User?    @relation("RightChild", fields: [rightChildId], references: [id])
+  parentAsLeftOf  User?  @relation("LeftChild")
+  parentAsRightOf User?  @relation("RightChild")
+
+  rankId        String?
+  rank          Rank?    @relation(fields: [rankId], references: [id])
+
+  wallet        Wallet?
+  investments   Investment[]
+  matchingLedger MatchingLedger?
+  withdrawals   Withdrawal[]
+  deposits      Deposit[]
+  rankSalaries  RankSalary[]
+  sentTransfers     Transfer[] @relation("TransferFrom")
+  receivedTransfers Transfer[] @relation("TransferTo")
+  commissionsEarned Commission[]
+  adminLogs     AdminLog[] @relation("AdminActor")
+  passkeys      Passkey[]
+  rewardClaims  RewardClaim[]
+}
+
+// WebAuthn credential for fingerprint/biometric/platform-authenticator login
+model Passkey {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  credentialId String   @unique
+  publicKey    Bytes
+  counter      BigInt   @default(0)
+  deviceLabel  String?
+  createdAt    DateTime @default(now())
+}
+
+model Wallet {
+  id       String @id @default(cuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id])
+
+  eWallet  Decimal @default(0) // overall/display balance
+  gWallet  Decimal @default(0) // deposit / investable balance
+  cWallet  Decimal @default(0) // commission wallet
+  rWallet  Decimal @default(0) // ROI wallet
+  tWallet  Decimal @default(0) // ID-ID transfer wallet
+
+  updatedAt DateTime @updatedAt
+}
+
+model InvestmentSlot {
+  id     String @id @default(cuid())
+  amount Decimal @unique // 10,000 / 50,000 / 1,00,000 / ... / 1,00,00,000
+
+  investments Investment[]
+}
+
+model Investment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  slotId      String
+  slot        InvestmentSlot @relation(fields: [slotId], references: [id])
+  side        LegSide? // informational: investor's own placement under their direct upline
+  amount      Decimal
+  investedAt  DateTime @default(now())
+  status      RequestStatus @default(APPROVED)
+
+  roiSchedules   RoiSchedule[]
+  commissions    Commission[]
+}
+
+model RoiSchedule {
+  id            String   @id @default(cuid())
+  investmentId  String
+  investment    Investment @relation(fields: [investmentId], references: [id])
+  monthNo       Int        // 1..18
+  amount        Decimal
+  paidAt        DateTime?
+  status        RequestStatus @default(PENDING)
+
+  @@unique([investmentId, monthNo])
+}
+
+model Commission {
+  id               String   @id @default(cuid())
+  userId           String   // who receives the commission
+  user             User     @relation(fields: [userId], references: [id])
+  fromInvestmentId String?
+  fromInvestment   Investment? @relation(fields: [fromInvestmentId], references: [id])
+  type             CommissionType
+  amount           Decimal
+  createdAt        DateTime @default(now())
+}
+
+// Tracks each user's binary leg carry-forward balances for Exact Equal Matching
+model MatchingLedger {
+  id                 String  @id @default(cuid())
+  userId             String  @unique
+  user               User    @relation(fields: [userId], references: [id])
+  leftCarryBalance   Decimal @default(0)
+  rightCarryBalance  Decimal @default(0)
+  totalMatchedVolume Decimal @default(0)
+  // All-time leg volume, never reset by matching — used for rank qualification
+  leftLifetimeVolume  Decimal @default(0)
+  rightLifetimeVolume Decimal @default(0)
+  updatedAt          DateTime @updatedAt
+}
+
+model Withdrawal {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  sourceWallet WalletSource
+  amount       Decimal
+  feeAmount    Decimal
+  netAmount    Decimal
+  channel      WithdrawChannel
+  payoutMethod DepositMethod
+  status       RequestStatus @default(PENDING)
+  createdAt    DateTime @default(now())
+  processedAt  DateTime?
+}
+
+model Deposit {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  amount     Decimal
+  method     DepositMethod
+  proofFile  String?
+  status     RequestStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+  reviewedAt DateTime?
+}
+
+model Transfer {
+  id         String   @id @default(cuid())
+  fromUserId String
+  fromUser   User     @relation("TransferFrom", fields: [fromUserId], references: [id])
+  toUserId   String
+  toUser     User     @relation("TransferTo", fields: [toUserId], references: [id])
+  amount     Decimal
+  feeAmount  Decimal
+  createdAt  DateTime @default(now())
+}
+
+model Rank {
+  id                  String @id @default(cuid())
+  name                String @unique
+  order               Int    @unique
+  qualificationAmount Decimal?  // leg volume requirement (e.g. Rank 1: 10 Lac per leg)
+  requiredRankCountPerLeg Int?  // e.g. Rank 2+: 1 or 2 holders of previous rank per leg
+  salaryAmount        Decimal?
+  salaryMonths         Int?
+  isLifetimeSalary     Boolean @default(false)
+  physicalReward       String?
+
+  users        User[]
+  rankSalaries RankSalary[]
+  rewardClaims RewardClaim[]
+}
+
+// Tracks the one-time physical/cash reward tied to a rank (Pending -> Approved -> Delivered)
+model RewardClaim {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  rankId    String
+  rank      Rank         @relation(fields: [rankId], references: [id])
+  status    RewardStatus @default(PENDING_CLAIM)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([userId, rankId])
+}
+
+model RankSalary {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  rankId      String
+  rank        Rank     @relation(fields: [rankId], references: [id])
+  totalMonths Int
+  paidMonths  Int      @default(0)
+  isLifetime  Boolean  @default(false)
+  startedAt   DateTime @default(now())
+}
+
+model AdminLog {
+  id           String   @id @default(cuid())
+  adminId      String
+  admin        User     @relation("AdminActor", fields: [adminId], references: [id])
+  action       String
+  targetUserId String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+}
