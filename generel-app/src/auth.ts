@@ -20,7 +20,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!mobile || !password) return null;
 
         const user = await prisma.user.findUnique({ where: { mobile } });
-        if (!user) return null;
+        if (!user || user.isBlocked) return null;
 
         const isValid = await bcrypt.compare(password, user.passwordHash);
         if (!isValid) return null;
@@ -48,7 +48,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         verifiedLogins.delete(mobile);
 
         const user = await prisma.user.findUnique({ where: { id: verified.userId } });
-        if (!user) return null;
+        if (!user || user.isBlocked) return null;
 
         return {
           id: user.id,

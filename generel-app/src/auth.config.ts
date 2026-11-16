@@ -1,6 +1,8 @@
 import type { NextAuthConfig } from "next-auth";
 import { NextResponse } from "next/server";
 
+// Everything the proxy matcher covers requires a signed-in user; /admin
+// additionally requires the ADMIN role (hidden from customers).
 export const authConfig: NextAuthConfig = {
   pages: { signIn: "/login" },
   providers: [],
@@ -20,35 +22,12 @@ export const authConfig: NextAuthConfig = {
       return session;
     },
     authorized: ({ auth, request }) => {
-      const pathname = request.nextUrl.pathname;
-      const needsAuth =
-        pathname.startsWith("/admin") ||
-        pathname.startsWith("/agent") ||
-        pathname.startsWith("/dashboard") ||
-        pathname.startsWith("/deposit") ||
-        pathname.startsWith("/invest") ||
-        pathname.startsWith("/withdraw") ||
-        pathname.startsWith("/transfer") ||
-        pathname.startsWith("/settings") ||
-        pathname.startsWith("/refer");
-
-      if (!needsAuth) return true;
-
       const user = auth?.user;
       if (!user) return false;
 
-      if (pathname.startsWith("/admin") && user.role !== "ADMIN") {
+      if (request.nextUrl.pathname.startsWith("/admin") && user.role !== "ADMIN") {
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
-
-      if (
-        pathname.startsWith("/agent") &&
-        user.role !== "AGENT" &&
-        user.role !== "ADMIN"
-      ) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
-
       return true;
     },
   },

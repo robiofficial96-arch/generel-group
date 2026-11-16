@@ -8,13 +8,19 @@ export default middleware;
 export const config = {
   matcher: [
     "/admin/:path*",
-    "/agent/:path*",
     "/dashboard/:path*",
+    "/wallets/:path*",
+    "/activity/:path*",
     "/deposit/:path*",
     "/invest/:path*",
     "/withdraw/:path*",
     "/transfer/:path*",
+    "/commissions/:path*",
+    "/team/:path*",
+    "/matching/:path*",
+    "/profile/:path*",
+    "/support/:path*",
     "/settings/:path*",
-    "/refer/:path*",
+    "/notifications/:path*",
   ],
 };

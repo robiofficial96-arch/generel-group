@@ -60,6 +60,15 @@ enum RewardStatus {
   DELIVERED
 }
 
+enum NotificationCategory {
+  DEPOSIT
+  WITHDRAWAL
+  INVESTMENT
+  COMMISSION
+  TRANSFER
+  ACCOUNT
+}
+
 model User {
   id            String   @id @default(cuid())
   name          String
@@ -68,6 +77,7 @@ model User {
   transactionPinHash String? // separate PIN required to confirm transfers
   role          Role     @default(CUSTOMER)
   status        UserStatus @default(NORMAL)
+  isBlocked     Boolean  @default(false) // admin-deactivated: cannot log in
   createdAt     DateTime @default(now())
 
   uplineId      String?
@@ -97,6 +107,45 @@ model User {
   adminLogs     AdminLog[] @relation("AdminActor")
   passkeys      Passkey[]
   rewardClaims  RewardClaim[]
+  notifications Notification[]
+  supportTickets SupportTicket[]
+}
+
+enum TicketStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+model SupportTicket {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    String
+  message    String
+  status     TicketStatus @default(OPEN)
+  adminReply String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+// In-app notification shown in the bell dropdown and on /notifications
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  NotificationCategory
+  title     String
+  body      String
+  link      String?  // in-app path opened by the notification's action link
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }
 
 // WebAuthn credential for fingerprint/biometric/platform-authenticator login
@@ -194,6 +243,8 @@ model Withdrawal {
   netAmount    Decimal
   channel      WithdrawChannel
   payoutMethod DepositMethod
+  accountDetails String?  // destination bank/MFS account supplied by the user
+  rejectReason String?
   status       RequestStatus @default(PENDING)
   createdAt    DateTime @default(now())
   processedAt  DateTime?
@@ -206,6 +257,8 @@ model Deposit {
   amount     Decimal
   method     DepositMethod
   proofFile  String?
+  reference  String?  // payment transaction reference supplied by the user
+  rejectReason String?
   status     RequestStatus @default(PENDING)
   createdAt  DateTime @default(now())
   reviewedAt DateTime?

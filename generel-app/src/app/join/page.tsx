@@ -1,77 +1,76 @@
 import { prisma } from "@/lib/prisma";
 import { joinViaReferral } from "./actions";
+import AuthLayout from "@/components/AuthLayout";
+import { SubmitButton } from "@/components/ConfirmButton";
+import { Flash } from "@/components/ui";
 
 export const instant = false;
 
 export default async function JoinPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ref?: string }>;
+  searchParams: Promise<{ ref?: string; error?: string }>;
 }) {
-  const { ref } = await searchParams;
-
+  const { ref, error } = await searchParams;
   const upline = ref ? await prisma.user.findUnique({ where: { mobile: ref } }) : null;
 
   if (!ref || !upline) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="card max-w-sm p-8 text-center">
-          <h1 className="text-xl font-semibold">Invalid Referral Link</h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            এই লিংকটি সঠিক না। সঠিক referral link দিয়ে আবার চেষ্টা করো।
-          </p>
-        </div>
-      </div>
+      <AuthLayout title="Invalid referral link" subtitle="এই লিংকটি সঠিক না। সঠিক referral link দিয়ে আবার চেষ্টা করো।">
+        <a href="/login" className="btn-outline w-full">Login page-এ যাও</a>
+      </AuthLayout>
     );
   }
 
   const leftOpen = upline.leftChildId === null;
   const rightOpen = upline.rightChildId === null;
+  const full = !leftOpen && !rightOpen;
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <form action={joinViaReferral} className="card w-full max-w-sm space-y-4 p-8">
-        <div className="mb-2 flex flex-col items-center gap-2">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--brand)] text-lg font-bold text-white">
-            G
-          </span>
-          <h1 className="text-xl font-semibold">Generel App এ Join করো</h1>
-          <p className="text-sm text-[var(--muted)]">
-            Referrer: {upline.name} ({upline.mobile})
-          </p>
-        </div>
-
+    <AuthLayout title="Account খোলো" subtitle={`Referrer: ${upline.name} (${upline.mobile})`}>
+      <Flash error={error} />
+      <form action={joinViaReferral} className="space-y-4">
         <input type="hidden" name="refMobile" value={upline.mobile} />
 
         <div>
-          <label className="label-text">Name</label>
-          <input name="name" required className="input-field" />
+          <label className="label-text" htmlFor="j-name">Full name</label>
+          <input id="j-name" name="name" required minLength={2} autoComplete="name" className="input-field" />
         </div>
         <div>
-          <label className="label-text">Mobile Number</label>
-          <input name="mobile" required className="input-field" />
+          <label className="label-text" htmlFor="j-mobile">Mobile number</label>
+          <input id="j-mobile" name="mobile" required inputMode="numeric" pattern="01\d{9}" placeholder="01XXXXXXXXX" autoComplete="tel" className="input-field" />
         </div>
         <div>
-          <label className="label-text">Password</label>
-          <input name="password" type="password" required className="input-field" />
-        </div>
-        <div>
-          <label className="label-text">Placement Side</label>
-          <select name="side" required className="input-field">
-            {leftOpen && <option value="LEFT">Left</option>}
-            {rightOpen && <option value="RIGHT">Right</option>}
-          </select>
-          {!leftOpen && !rightOpen && (
-            <p className="mt-1 text-xs text-red-600">
-              দুই পাশই পূর্ণ — এই referrer-এর মাধ্যমে আর join করা যাবে না।
-            </p>
-          )}
+          <label className="label-text" htmlFor="j-pass">Password</label>
+          <input id="j-pass" name="password" type="password" required minLength={8} autoComplete="new-password" className="input-field" />
+          <p className="field-hint">কমপক্ষে 8 অক্ষর।</p>
         </div>
 
-        <button className="btn-primary w-full" disabled={!leftOpen && !rightOpen}>
-          Create Account
-        </button>
+        <fieldset>
+          <legend className="label-text">Placement side</legend>
+          <div className="option-grid">
+            {leftOpen && (
+              <label className="option-card">
+                <input type="radio" name="side" value="LEFT" defaultChecked required />
+                Left <small>Team A</small>
+              </label>
+            )}
+            {rightOpen && (
+              <label className="option-card">
+                <input type="radio" name="side" value="RIGHT" defaultChecked={!leftOpen} required />
+                Right <small>Team B</small>
+              </label>
+            )}
+          </div>
+          {full && <p className="field-hint !text-[var(--danger)]">দুই পাশই পূর্ণ — এই referrer-এর মাধ্যমে আর join করা যাবে না।</p>}
+        </fieldset>
+
+        {full ? (
+          <button className="btn-primary w-full" disabled>Create Account</button>
+        ) : (
+          <SubmitButton className="btn-primary w-full">Create Account</SubmitButton>
+        )}
       </form>
-    </div>
+    </AuthLayout>
   );
 }

@@ -1,6 +1,5 @@
-import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
-import { checkAndPromoteRank } from "@/lib/rank";
+import { formatTk, notify } from "@/lib/notify";
 
 const DIRECT_COMMISSION_RATE = 0.06;
 const TEAM_MATCHING_RATE = 0.05;
@@ -30,6 +29,14 @@ async function processDirectCommission(
       type: "DIRECT",
       amount: commissionAmount,
     },
+  });
+
+  await notify(tx, {
+    userId: investorUplineId,
+    category: "COMMISSION",
+    title: "Direct Referral Commission",
+    body: `তোমার direct referral-এর ${formatTk(amount)} investment থেকে 6% commission ${formatTk(commissionAmount)} C-Wallet এ জমা হয়েছে।`,
+    link: "/dashboard",
   });
 }
 
@@ -114,10 +121,17 @@ async function processTeamMatching(
           amount: commissionAmount,
         },
       });
+
+      await notify(tx, {
+        userId: ancestor.id,
+        category: "COMMISSION",
+        title: "Team Matching Commission",
+        body: `Left ও Right side ${formatTk(matchedVolume)}-এ exact match হয়েছে। 5% commission ${formatTk(commissionAmount)} C-Wallet এ জমা হয়েছে।`,
+        link: "/dashboard",
+      });
     }
 
     void ledger;
-    await checkAndPromoteRank(tx, ancestor.id);
     currentId = ancestor.id;
   }
 }

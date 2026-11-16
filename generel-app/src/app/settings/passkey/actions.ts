@@ -9,6 +9,7 @@ import {
 import type { RegistrationResponseJSON } from "@simplewebauthn/types";
 import { RP_NAME, RP_ID, ORIGIN, regChallenges } from "@/lib/webauthn";
 import { revalidatePath } from "next/cache";
+import { notify } from "@/lib/notify";
 
 export async function getRegistrationOptions() {
   const session = await auth();
@@ -76,6 +77,14 @@ export async function verifyRegistration(responseJson: string, deviceLabel: stri
     },
   });
 
+  await notify(prisma, {
+    userId: session.user.id,
+    category: "ACCOUNT",
+    title: "Fingerprint login চালু হয়েছে",
+    body: `"${deviceLabel || "Device"}" device-এ fingerprint/passkey login যোগ করা হয়েছে। তুমি নিজে না করে থাকলে এখনই admin-কে জানাও।`,
+    link: "/settings/passkey",
+  });
+
   regChallenges.delete(session.user.id);
   revalidatePath("/settings/passkey");
 }
@@ -85,7 +94,19 @@ export async function deletePasskey(formData: FormData) {
   if (!session?.user) throw new Error("Not authenticated");
 
   const id = formData.get("id") as string;
-  await prisma.passkey.deleteMany({ where: { id, userId: session.user.id } });
+  const removed = await prisma.passkey.deleteMany({
+    where: { id, userId: session.user.id },
+  });
+
+  if (removed.count > 0) {
+    await notify(prisma, {
+      userId: session.user.id,
+      category: "ACCOUNT",
+      title: "Fingerprint login সরানো হয়েছে",
+      body: "একটি device-এর fingerprint/passkey login মুছে ফেলা হয়েছে।",
+      link: "/settings/passkey",
+    });
+  }
 
   revalidatePath("/settings/passkey");
 }

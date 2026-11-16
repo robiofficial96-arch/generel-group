@@ -1,35 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { getAuthenticationOptions, verifyPasskeyLogin } from "./passkey-actions";
+import AuthLayout from "@/components/AuthLayout";
+import Icon from "@/components/Icon";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const joined = useSearchParams().get("joined") === "1";
   const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    const res = await signIn("credentials", {
-      mobile,
-      password,
-      redirect: false,
-    });
-
-    if (res?.error) {
-      setError("Mobile বা Password ভুল");
-      return;
+    setBusy(true);
+    try {
+      const res = await signIn("credentials", { mobile, password, redirect: false });
+      if (res?.error) {
+        setError("Mobile বা Password ভুল");
+        return;
+      }
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Login করা যায়নি, আবার চেষ্টা করো");
+    } finally {
+      setBusy(false);
     }
-
-    router.push("/dashboard");
-    router.refresh();
   };
 
   const handlePasskeyLogin = async () => {
@@ -59,52 +64,75 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--background)] px-4">
-      <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4 p-8">
-        <div className="mb-2 flex flex-col items-center gap-2">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--brand)] text-lg font-bold text-white">
-            G
-          </span>
-          <h1 className="text-xl font-semibold">Generel App</h1>
+    <AuthLayout title="Welcome back" subtitle="তোমার account-এ login করো।">
+      {joined && (
+        <div className="alert alert-success" role="status">
+          <Icon name="check" size={18} />
+          <span>Account তৈরি হয়েছে — এখন login করো।</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate={false}>
+        <div>
+          <label className="label-text" htmlFor="login-mobile">Mobile number / User ID</label>
+          <input id="login-mobile" type="text" inputMode="numeric" autoComplete="username" value={mobile} onChange={(e) => setMobile(e.target.value)} required className="input-field" />
         </div>
 
         <div>
-          <label className="label-text">Mobile Number</label>
-          <input
-            type="text"
-            value={mobile}
-            onChange={(e) => setMobile(e.target.value)}
-            className="input-field"
-            required
-          />
+          <label className="label-text" htmlFor="login-password">Password</label>
+          <div className="relative">
+            <input
+              id="login-password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="input-field pr-12"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--background)]"
+            >
+              <Icon name={showPassword ? "eye-off" : "eye"} size={18} />
+            </button>
+          </div>
         </div>
 
-        <div>
-          <label className="label-text">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input-field"
-            required
-          />
-        </div>
+        {error && (
+          <div className="alert alert-error !mb-0" role="alert">
+            <Icon name="info" size={18} />
+            <span>{error}</span>
+          </div>
+        )}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <button type="submit" className="btn-primary w-full">
-          Login
+        <button type="submit" disabled={busy} className="btn-primary w-full">
+          {busy ? "Logging in…" : "Login"}
         </button>
 
-        <button
-          type="button"
-          onClick={handlePasskeyLogin}
-          disabled={passkeyBusy}
-          className="btn-outline w-full"
-        >
-          {passkeyBusy ? "যাচাই হচ্ছে..." : "🔒 Fingerprint দিয়ে Login"}
+        <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
+          <span className="h-px flex-1 bg-[var(--border-color)]" /> অথবা <span className="h-px flex-1 bg-[var(--border-color)]" />
+        </div>
+
+        <button type="button" onClick={handlePasskeyLogin} disabled={passkeyBusy} className="btn-outline w-full">
+          <Icon name="fingerprint" size={18} />
+          {passkeyBusy ? "যাচাই হচ্ছে…" : "Fingerprint দিয়ে Login"}
         </button>
       </form>
-    </div>
+
+      <p className="mt-6 text-center text-xs text-[var(--muted)]">
+        নতুন account শুধু referral link দিয়ে খোলা যায়। Password ভুলে গেলে support/admin-এর সাথে যোগাযোগ করো।
+      </p>
+    </AuthLayout>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

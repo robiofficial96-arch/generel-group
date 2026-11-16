@@ -1,30 +1,27 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
 import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
+const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Generel App",
-  description: "MLM / Investment platform",
+  title: "Generel Group — Investment Platform",
+  description: "MLM & investment management platform",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#101B35",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={`${inter.variable} ${manrope.variable} h-full antialiased`}>
+      <body className="min-h-full">
         <SessionProviderWrapper>{children}</SessionProviderWrapper>
       </body>
     </html>
